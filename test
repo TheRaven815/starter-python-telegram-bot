@@ -1,0 +1,71 @@
+import sqlite3
+from telegram import Update
+from telegram.ext import Application, CommandHandler, CallbackContext
+
+# Veritabanı bağlantısı
+conn = sqlite3.connect('veritabani.db')
+cursor = conn.cursor()
+
+# Veritabanı tablosunu oluştur
+cursor.execute('''
+    CREATE TABLE IF NOT EXISTS sayilar (
+        user_id INTEGER PRIMARY KEY,
+        sayi1 INTEGER,
+        sayi2 INTEGER,
+        sayi3 INTEGER
+    )
+''')
+conn.commit()
+
+async def start(update: Update, context: CallbackContext) -> None:
+    await update.message.reply_text('Merhaba! Ben 3 sayıyı hatırlayan bir botum. Lütfen sırayla 3 sayı girin.')
+
+async def save_numbers(update: Update, context: CallbackContext) -> None:
+    user_id = update.message.from_user.id
+    sayilar = context.args
+
+    if len(sayilar) == 3:
+        sayi1, sayi2, sayi3 = map(int, sayilar)
+
+        # Kullanıcının sayıları veritabanına kaydet
+        cursor.execute('INSERT OR REPLACE INTO sayilar VALUES (?, ?, ?, ?)',
+                       (user_id, sayi1, sayi2, sayi3))
+        conn.commit()
+
+        await update.message.reply_text('Sayılar başarıyla kaydedildi.')
+    else:
+        await update.message.reply_text('Lütfen 3 sayıyı sırayla girin.')
+
+async def get_numbers(update: Update, context: CallbackContext) -> None:
+    user_id = update.message.from_user.id
+
+    # Kullanıcının sayılarını veritabanından al
+    cursor.execute('SELECT sayi1, sayi2, sayi3 FROM sayilar WHERE user_id = ?', (user_id,))
+    sayilar = cursor.fetchone()
+
+    if sayilar:
+        await update.message.reply_text(f"Kaydedilmiş sayılarınız: {sayilar[0]}, {sayilar[1]}, {sayilar[2]}")
+    else:
+        await update.message.reply_text('Henüz kaydedilmiş sayılarınız yok.')
+
+def main() -> None:
+    # Token
+    token = "5498550800:AAFGOJWBYkjfM-r4My0W_ff7otVnMx44Nnk"
+
+    # Create the Application and pass it your bot's token.
+    application = Application.builder().token(token).build()
+
+    # /start komutunu işle
+    application.add_handler(CommandHandler("start", start))
+
+    # /save komutunu işle
+    application.add_handler(CommandHandler("save", save_numbers))
+
+    # /get komutunu işle
+    application.add_handler(CommandHandler("get", get_numbers))
+
+    # Run the bot
+    application.run_polling(allowed_updates=Update.ALL_TYPES)
+
+if __name__ == '__main__':
+    main()
